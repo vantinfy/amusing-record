@@ -97,10 +97,107 @@ git clone https://github.com/AUTOMATIC1111/stable-diffusion-webui.git
 
 后面进度条一样的东西是开始了绘制任务后打印的，不用管
 
+### 界面说明
+
+在浏览器打开http://127.0.0.1:7860后基础界面如下
+
+![ui.png](ui.png)
+
+用得比较多的地方就是txt2img——文本生成图片，图片已经注释了一些常用功能的简要介绍
+
+下面也简单提下自己运行时总结下来的一些小经验
+
++ Sampling method采样方法通常用的都是<u>DPM++ 2M Karras</u>或者<u>DPM++ SDE Karras</u>（至少civitai上分享出来的这两个比较多）
++ 图片尺寸在不使用Hires.fix的情况下，1000*1000左右就差不多了，再大很有可能多人融合异形，具体阈值还得看显卡跟内存吧
++ 使用Hires.fix的情况下可以尝试原图片大小400-500多左右的，有时候优化细节会有意想不到的惊喜
++ 测试了下CFG Scale设置为1，估计意思偏向提示词相关性
++ civitai上的图片基本无法复刻，即使什么配置（包括随机种子）都一样，只要图片大小也变化了一下生成结果也是千差万别，而且有的还可能使用了vae.safetensors（这个后面讲）
+
+我倒是想生成2K的图片，但是稍微大一点经常异形，要么硬件配置不够（3060+3600MHz16G内存）
+
+> OutOfMemoryError: CUDA out of memory. Tried to allocate 17.60 GiB (GPU 0; 12.00 GiB total capacity; 2.47 GiB already allocated; 6.50 GiB free; 2.49 GiB reserved in total by PyTorch) If reserved memory is >> allocated memory try setting max_split_size_mb to avoid fragmentation. See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+Time taken: 3.95sTorch active/reserved: 2592/2620 MiB, Sys VRAM: 12288/12288 MiB (100.0%)
+
 ### tag格式说明
 
-todo
+tag关键词包括两个部分prompt（想要出现在图中的元素）与negative prompt（不想出现在图中的元素）
 
-### 融合
+prompt通常还附带`<lora:xxx:1>`这样的格式，表示使用前面放在models/Lora目录下某个模型
 
-todo
+例如`<lora:koreanDollLikeness_v10:0.5>`表示使用koreanDollLikeness这个模型，比重0.5，越高越接近koreanDollLikeness
+
+当然这个需要自己提前下载好对应的文件并且路径名正确
+
+还有别的格式，例如这个：`(photorealistic:1.4)`，翻译是照片真实感，那猜测是一些额外描述效果，并不是出现在图中的元素（这个就是个人猜测了）
+
+最后注意就是多个关键词之间都用英文逗号分隔
+
+### safetensors融合
+
+知道了前面的`<lora:xxx:1>`tag之后这里应该很容易就知道怎么融合了，实际上就是使用多个`<lora:xxx:1>`
+
+例如前面德克萨斯与圣路易斯，就是koreanDollLikeness与两个模型，加上一些场景要求（night、rain、cityscape等）分别融合的结果
+
+copy civitai的示例参数时也有些要注意的细节
+
+![official-koreanDollLikeness-eg.png](official-koreanDollLikeness-eg.png)
+
+有的会使用txt2img+hires，有的仅使用txt2img
+
+前者我尝试了自行下载图片，且调参数为下载图片尺寸的一半（因为hires会放大两倍），最后生成结果还是不一样
+
+所以才说复刻不了，更多时候只需要参考别人的prompt就行啦
+
+而官方koreanDollLikeness的示例prompt中应该是`<lora:koreanDollLikeness_v10:0.66>`
+
+~~这个是因为那边在运行的时候基础模型就是koreanDollLikeness所以不需要加lora（我也不知道我瞎说的）~~
+
+反正记住参数不是抄下来就能无脑用的
+
+## 生成图片
+
+前面prompt、negative prompt、图片尺寸、采样方法/步骤等参数设置完之后只需要点击**Generate**即可开始绘制，具体绘制时间就看硬件配置了
+
+### vae.safetensors
+
+关于vae我也是看到别人的说明，可以优化图片色彩啥的
+
+下载地址：[huggingface-vae](https://huggingface.co/stabilityai/sd-vae-ft-mse-original/tree/main)
+
+下载其中的`vae-ft-mse-840000-ema-pruned.safetensors`放到models/VAE下，之后在Settings/Stable Diffusion/SD VAE下拉选择该文件即可
+
+如果是运行后下载且刷新没有生效的情况，关闭脚本重新运行再尝试就可以了
+
+![settings-vae.png](settings-vae.png)
+
+### 圣路易斯 prompt
+
+最后补充一下前面的圣路易斯tag（其实也是civitai上copy的），当时设置的批量生成200张，最后跑了大概160分钟，产出正常的大概十几二十张
+
+注：当时没有设置vae
+
+prompt:
+```text
+(8k, RAW photo, best quality, masterpiece:1.2), (realistic, photo-realistic:1.37),<lora:koreanDollLikeness_v10:0.5>,st. louis \(luxurious wheels\) \(azur lane\),1girl,(Kpop idol), (aegyo sal:1),hair ornament, portrait, (long loose silver revealing dress:1.1), necklace, blue nails,cute,cityscape, night, rain, wet, professional lighting, photon mapping, radiosity, physically-based rendering, <lora:stLouisLuxuriousWheels_v1:1>
+```
+
+negative prompt:
+```text
+EasyNegative, paintings, sketches, (worst quality:2), (low quality:2), (normal quality:2), lowres, normal quality, ((monochrome)), ((grayscale)), skin spots, acnes, skin blemishes, age spot, glans,extra fingers,fewer fingers,
+```
+
+> Sampling method: DPM++ 2M Karras
+> 
+> Sampling steps: 20
+> 
+> Width: 1080
+> 
+> Height: 1280
+> 
+> Batch count: 50
+> 
+> Batch size: 4
+> 
+> CFG Scale: 7
+> 
+> Seed: -1
